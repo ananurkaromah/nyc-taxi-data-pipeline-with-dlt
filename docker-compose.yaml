@@ -1,0 +1,21 @@
+services:
+  pipeline:
+    build: .
+    volumes:
+      # This maps your local folder to the container so the .duckdb file is saved locally
+      - .:/app
+
+  metabase:
+    build:
+      context: .
+      dockerfile: Dockerfile.metabase
+    container_name: metabase
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/database
+      - ./plugins:/app/plugins  # Note the path change to /app/plugins
+    environment:
+      - MB_PLUGINS_DIR=/app/plugins
+      - MB_DB_FILE=/database/metabase.db
+    user: root

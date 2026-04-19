@@ -1,226 +1,131 @@
-# NYC Taxi Data Pipeline with dlt 
+# NYC Taxi Data Pipeline: End-to-End ELT with dlt, DuckDB, and Metabase
 
-- This project demonstrates a **simple data pipeline** built using **Python** and **dlt (data load tool)** to ingest data from a REST API and load it into a **DuckDB** database.
+## 1. Project Overview
+This project demonstrates a robust, containerized data pipeline built to ingest NYC Taxi data from a REST API and load it into a DuckDB database for analytical processing. It serves as a practical implementation of modern **ELT (Extract-Load-Transform)** patterns, utilizing `dlt` (Data Load Tool) for automated schema evolution and Docker for local workflow orchestration.
 
-- The pipeline extracts **NYC Taxi data** from the Data Engineering Zoomcamp API and stores it locally for analysis
+## 2. Dataset Description
+The pipeline consumes the **NYC Taxi Trip Dataset** provided via the DataTalksClub Data Engineering Zoomcamp API. This dataset includes trip records from New York City’s yellow taxis, capturing pickup/dropoff times, locations, trip distances, itemized fares, and passenger counts.
 
-- The course material can be found on GitHub here: [DataTalksClub/data-engineering-zoomcamp: Free Data Engineering course!](https://github.com/DataTalksClub/data-engineering-zoomcamp/tree/main)
+### Data Dictionary
+| Column | Description |
+| :--- | :--- |
+| `vendor_name` | TPEP provider (e.g., Creative Mobile, VeriFone) |
+| `trip_pickup_date_time` | Date and time when the meter was engaged |
+| `trip_dropoff_date_time` | Date and time when the meter was disengaged |
+| `passenger_count` | Number of passengers in the vehicle |
+| `trip_distance` | Elapsed trip distance in miles |
+| `fare_amt` | Time-and-distance fare calculated by the meter |
+| `tip_amt` | Tip amount (automatically populated for credit card trips) |
+| `tolls_amt` | Total amount of all tolls paid in trip |
+| `total_amt` | The total amount charged to passengers |
+| `payment_type` | Numeric code signifying how the passenger paid |
+
+## 3. Problem Statement
+Manual data ingestion from REST APIs often leads to schema breakage and data type inconsistencies. This project addresses the need for a **resilient and scalable ingestion layer** that can handle semi-structured JSON data, map it to a structured relational format, and provide a foundation for business intelligence without manual intervention.
+
+## 4. Key Research 
+![alt text](<NYC-taxi pipeline.png>)
+<br>
+
+http://localhost:3000/public/dashboard/3ffc394f-1a27-4e65-bed0-93ddccc1b350
+
+### 1. Profitability: Highest Revenue per Mile
+
+- **Peak Efficiency:** The absolute highest `revenue_per_mile` on the chart is approximately **$4.65**. Tracing this point to the Y-axis, it aligns with a `pickup_hour` of **12 (Noon)**.
+- **High-Value Clusters:** There is another strong cluster of high revenue efficiency between **$4.30 and $4.50 per mile**.
+- **Data Quality Observation:** The Y-axis for `pickup_hour` shows values reaching up to 40. Since a 24-hour clock maxes out at 23, this indicates a minor configuration issue. Metabase might be automatically summing the hours instead of treating them as categories, or the X and Y axes are swapped in the visualization settings. Changing the chart settings from a line chart to a scatter plot, or ensuring the X-axis is set to `pickup_hour` (Ordinal/Category) and Y-axis to `revenue_per_mile` (Numeric), will clear this up!
+
+### 2. Operational Efficiency: Tolls & Surcharges vs. Base Fare
+
+- **Time-Series Focus:** Note that this specific chart is grouped by `trip_date` (June 2009) rather than by vendor, so the insights reflect daily operational trends across the entire fleet.
+- **Low Non-Fare Impact:** The `non_fare_percentage` (the light blue bars measured on the right-hand axis) remains consistently low throughout the month. It generally fluctuates between **5% and 15%**. This means the base fare is highly dominant, making up 85% to 95% of total trip costs.
+- **Surcharges vs. Tolls:** On most standard days, `total_surcharges` (light purple bars) outpace `total_tolls` (coral bars). However, there are notable anomalies—such as the spike around June 14, 2009—where total tolls briefly exceed surcharges, likely indicating a high volume of airport or bridge/tunnel trips on that specific weekend.
 
 
-## Project Overview
+## 5. Pipeline Architecture & Lineage
+The architecture follows a modular, containerized approach:
+1. **Source:** Data Engineering Zoomcamp REST API (JSON).
+2. **Ingestion (dlt):** Python-based extraction using `dlt` for schema inference and incremental loading.
+3. **Storage (DuckDB):** An embedded OLAP database for high-performance analytical queries.
+4. **Orchestration:** Docker Compose managing the Python pipeline and Metabase BI tool.
+5. **Visualization:** Metabase for strategic dashboards.
 
-This pipeline performs the following steps:
+**Data Lineage:** `API (JSON)` -> `dlt (Python)` -> `DuckDB (Relational)` -> `Metabase (SQL/Charts)`
 
-1. Connects to a REST API that provides NYC taxi data
-2. Retrieves the data using **incremental pagination**
-3. Loads the data into a **DuckDB** database
-4. Stores the dataset under the schema **`nyc_taxi`**
+## 6. Data Ingestion & Orchestration
+- **Tooling:** `dlt` (Data Load Tool)
+- **Method:** Incremental loading with schema evolution.
+- **Workflow:** Docker Compose orchestrates two services:
+    - `pipeline`: Executes the Python script to sync data.
+    - `metabase`: Serves the BI dashboard with custom DuckDB drivers.
 
-The project is a simple example of building an **EL (Extract–Load) pipeline** using modern data engineering tools.
+## 7. Data Warehouse & Transformation
+While this project uses **DuckDB** as a local analytical warehouse, the data is structured into a clean `nyc_taxi` schema. Transformations are handled **at the query level (View-based)** within Metabase to maintain a "Lean ELT" approach.
 
+## 8. Strategic Business Insights & Recommendations
 
+### Insight 1: Revenue per Mile Efficiency
+**Query:** Identifying trip profitability by hour.
+- *Strategic Recommendation:* Implement dynamic surge pricing during hours where `total_trips` are high but `revenue_per_mile` is low (due to congestion).
 
-## 🛠 Tech Stack
+### Insight 2: Tipping Optimization
+**Query:** Correlation between payment types and tip amounts.
+- *Strategic Recommendation:* If specific vendors show higher tip averages, analyze their POS (Point of Sale) UI to implement "Suggested Tip" best practices across the fleet.
 
-* **Python**
-* **dlt (data load tool)**
-* **DuckDB**
-* **REST API**
-
-
-## 📂 Project Structure
+## 9. Project Folder Structure
+```text
+.
+├── .dlt/                   # dlt credentials and metadata
+├── plugins/                # Custom DuckDB drivers for Metabase
+├── taxi_pipeline.py        # Main ingestion script
+├── Dockerfile              # Pipeline image configuration
+├── Dockerfile.metabase     # Custom Metabase image for DuckDB support
+├── docker-compose.yaml     # Orchestration file
+├── taxi_pipeline.duckdb    # Local analytical database
+└── README.md               # Project documentation
 
 ```
-project-folder/
-│
-├── taxi_pipeline.py            # Main pipeline script
-└── taxi_pipeline_pipeline.py   # A more flexible and configurable pipeline template using rest_api_resources
-├── README.md                   # Project documentation
-└── requirements.txt            # Python dependencies (optional)
+
+## 10. Execution Steps
+Prepare Drivers:
+Ensure the DuckDB driver is in plugins/duckdb.metabase-driver.jar.
+
+Build and Run:
+
+Bash
+```
+docker compose build
+docker compose up -d
 ```
 
+Execute Pipeline:
 
-
-**Description**
-
-- **taxi_pipeline.py**
-    
-    A minimal pipeline that extracts data from a REST API and loads it into DuckDB.
-    
-- **taxi_pipeline_pipeline.py**
-    
-    A configurable pipeline template designed for production-style REST API ingestion.
-    
----
-
-## Requirements
-
-Make sure Python is installed (Python 3.9+ recommended).
-
-Install dependencies:
-
-```bash
-pip install dlt duckdb
+Bash
+```
+docker compose run pipeline
 ```
 
----
+Access Dashboard:
+Open http://localhost:3000 and connect to /database/taxi_pipeline.duckdb.
 
-## Data Source
 
-The data is fetched from the following API endpoint:
+## 11. Final Configuration
+- Metabase Version: v0.49.13 (Debian-based for native library support).
 
-```
-https://us-central1-dlthub-analytics.cloudfunctions.net/data_engineering_zoomcamp_api
-```
+- Python Version: 3.9-slim.
 
-This API provides sample **NYC taxi datasets** used for data engineering practice.
+- Database Engine: DuckDB 1.x.
 
----
+## 12. Future Work & Scalability
+- Cloud Migration: Transition DuckDB to MotherDuck for cloud-based persistence.
 
-### 1. Simple Taxi Pipeline
+- Automation: Integrate GitHub Actions to trigger the pipeline on a daily schedule.
 
-File: `taxi_pipeline.py`
+- Advanced Transformation: Introduce dbt (data build tool) for complex modeling within DuckDB.
 
-This script demonstrates the **simplest way to load REST API data into DuckDB using dlt**.
+## 13. Acknowledgements
+DataTalksClub: For providing the Data Engineering Zoomcamp curriculum and API.
 
-#### Pipeline Steps
+dltHub: For the simplified ingestion framework.
 
-1. Define the API base URL
-2. Create a REST API source
-3. Configure the dlt pipeline
-4. Load the data into DuckDB
-
-#### Code Example
-
-```python
-import dlt
-from dlt.sources.rest import RESTSource
-
-# Base URL API
-BASE_URL = "https://us-central1-dlthub-analytics.cloudfunctions.net/data_engineering_zoomcamp_api"
-
-# Create REST API source
-def taxi_source():
-    source = RESTSource(
-        url=BASE_URL,
-        pagination={"type": "incremental", "page_size": 1000},
-    )
-    return source
-
-# Create pipeline
-pipeline = dlt.pipeline(
-    pipeline_name="taxi_pipeline",
-    destination="duckdb",
-    dataset_name="nyc_taxi",
-)
-
-# Load data
-data = taxi_source().load()
-pipeline.run(data)
-
-print("Pipeline finished running!")
-```
-
-#### Run the Pipeline
-
-```bash
-python taxi_pipeline.py
-```
-
-After running the script, the taxi data will be loaded into a **DuckDB database**.
-
----
-
-### 2. REST API Template Pipeline
-
-File: `taxi_pipeline_pipeline.py`
-
-This script is a **template pipeline** that allows more advanced configuration for REST APIs.
-
-It supports:
-
-- authentication
-- multiple endpoints
-- resource configuration
-- scalable ingestion pipelines
-
-#### Example Code
-
-```python
-import dlt
-from dlt.sources.rest_api import rest_api_resources
-from dlt.sources.rest_api.typing import RESTAPIConfig
-
-@dlt.source
-def taxi_pipeline_rest_api_source(access_token: str = dlt.secrets.value):
-    config: RESTAPIConfig = {
-        "client": {
-            "base_url": "https://example.com/v1/",
-            "auth": {"type": "bearer", "token": access_token},
-        },
-        "resources": [],
-    }
-
-    yield from rest_api_resources(config)
-
-pipeline = dlt.pipeline(
-    pipeline_name='taxi_pipeline_pipeline',
-    destination='duckdb',
-    refresh="drop_sources",
-    progress="log",
-)
-
-if __name__ == "__main__":
-    load_info = pipeline.run(taxi_pipeline_rest_api_source())
-    print(load_info)
-```
-
-#### Run the Template Pipeline
-
-```bash
-python taxi_pipeline_pipeline.py
-```
-
----
-
-### Differences Between the Two Pipelines
-
-| Feature | Simple Pipeline | Template Pipeline |
-| --- | --- | --- |
-| Complexity | Very simple | More advanced |
-| API configuration | Minimal | Fully configurable |
-| Authentication support | No | Yes |
-| Multiple endpoints | No | Yes |
-| Scalability | Learning / small projects | Production pipelines |
-
----
-
-### Output
-
-After running the pipeline, the data will be stored in a **DuckDB database**.
-
-Dataset name:
-
-```
-nyc_taxi
-```
-
-You can query the data using SQL.
-
-Example query:
-
-```sql
-SELECT * FROM nyc_taxi LIMIT 10;
-```
-
----
-
-## Learning Goals
-
-This project demonstrates:
-
-- Building a simple **data ingestion pipeline**
-- Extracting data from a **REST API**
-- Loading data into **DuckDB**
-- Using **dlt for ELT pipelines**
-- Understanding the difference between **simple pipelines and configurable templates**
+Metabase Community: For the DuckDB driver support.

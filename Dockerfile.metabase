@@ -1,0 +1,13 @@
+# Use a full Debian-based Java image (not Alpine)
+FROM eclipse-temurin:17-jdk-focal
+
+WORKDIR /app
+
+# Download the specific Metabase jar
+ADD https://downloads.metabase.com/v0.49.13/metabase.jar /app/metabase.jar
+
+# Create plugins directory
+RUN mkdir -p /app/plugins
+
+# Command to run Metabase
+ENTRYPOINT ["java", "-jar", "/app/metabase.jar"]
